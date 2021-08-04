@@ -16,7 +16,7 @@ libsm = { git = "https://github.com/citahub/libsm", rev = "4d0e6199fca0934c58131
 arrayref = "0.3"
 
 [features]
-default = ["sm3hash"]
+default = []
 sha3hash = ["hashable/sha3hash"]
 blake2bhash = ["hashable/blake2bhash"]
 sm3hash = ["hashable/sm3hash"]
