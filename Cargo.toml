@@ -12,7 +12,7 @@ cita-types = { git = "https://github.com/cita-cloud/cita-types",branch = "main" 
 hashable = { git = "https://github.com/cita-cloud/hashable",branch = "main" }
 cita-crypto-trait = { git = "https://github.com/cita-cloud/cita-crypto-trait",branch = "main" }
 rlp = "0.5"
-libsm = { git = "https://github.com/citahub/libsm", rev = "4d0e6199fca0934c58131de1d0036e9aa4da26c1" }
+libsm = { git = "https://github.com/citahub/libsm", branch = "master" }
 arrayref = "0.3"
 
 [features]
