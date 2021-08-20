@@ -2,17 +2,18 @@
 name = "cita-sm2"
 version = "0.1.0"
 authors = ["Rivtower Technologies <contact@rivtower.com>"]
+description = "A library library provide sm2 cryptography method"
 license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
 rustc-serialize = "0.3"
 serde = "1.0"
-cita-types = { git = "https://github.com/cita-cloud/cita-types",branch = "main" }
-hashable = { git = "https://github.com/cita-cloud/hashable",branch = "main" }
-cita-crypto-trait = { git = "https://github.com/cita-cloud/cita-crypto-trait",branch = "main" }
+cita-types = "0.1"
+hashable = { package = "cita-hashable", version = "0.1" }
+cita-crypto-trait = "0.1"
 rlp = "0.5"
-libsm = { git = "https://github.com/citahub/libsm", branch = "master" }
+libsm = "0.4"
 arrayref = "0.3"
 
 [features]

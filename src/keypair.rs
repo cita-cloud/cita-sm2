@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use super::{Address, Error, PrivKey, PubKey};
-use cita_types::H160;
 use cita_crypto_trait::CreateKey;
+use cita_types::H160;
 use hashable::Hashable;
 use libsm::sm2::signature::SigCtx;
 use rustc_serialize::hex::ToHex;
@@ -53,7 +53,7 @@ impl CreateKey for KeyPair {
             .map(|sk| {
                 let pk = ctx.pk_from_sk(&sk);
                 let data = ctx.serialize_pubkey(&pk, false);
-                let pubkey = PubKey::from( array_ref![data,1,64]);
+                let pubkey = PubKey::from(array_ref![data, 1, 64]);
                 KeyPair { privkey, pubkey }
             })
     }
@@ -63,8 +63,8 @@ impl CreateKey for KeyPair {
         let (pk, sk) = ctx.new_keypair();
         let pdata = ctx.serialize_pubkey(&pk, false);
         let sdata = ctx.serialize_seckey(&sk);
-        let pubkey = PubKey::from( array_ref![pdata,1,64]);
-        let privkey = PrivKey::from(array_ref![sdata,0,32]);
+        let pubkey = PubKey::from(array_ref![pdata, 1, 64]);
+        let privkey = PrivKey::from(array_ref![sdata, 0, 32]);
         KeyPair { privkey, pubkey }
     }
 

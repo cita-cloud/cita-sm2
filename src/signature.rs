@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::{pubkey_to_address, Address, Error, Message, PrivKey, PubKey, SIGNATURE_BYTES_LEN};
+use arrayref::array_ref;
 use cita_crypto_trait::Sign;
 use libsm::sm2::signature::{SigCtx, Signature as Sm2Signature};
 use rlp::*;
@@ -23,7 +24,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
-use arrayref::array_ref;
 
 pub struct Signature(pub [u8; 128]);
 
@@ -241,7 +241,7 @@ impl Sign for Signature {
             .map_err(|_| Error::RecoverError)
             .and_then(|pk| {
                 if ctx.verify(message.as_ref(), &pk, &sig) {
-                    Ok(PubKey::from(array_ref![self.pk(),0,64]))
+                    Ok(PubKey::from(array_ref![self.pk(), 0, 64]))
                 } else {
                     Err(Error::RecoverError)
                 }
@@ -249,7 +249,7 @@ impl Sign for Signature {
     }
 
     fn verify_public(&self, pubkey: &Self::PubKey, message: &Self::Message) -> Result<bool, Error> {
-        let pubkey_from_sig = PubKey::from(array_ref![self.pk(),0,64]);
+        let pubkey_from_sig = PubKey::from(array_ref![self.pk(), 0, 64]);
         if pubkey_from_sig == *pubkey {
             let ctx = SigCtx::new();
             let sig = Sm2Signature::new(self.r(), self.s());
