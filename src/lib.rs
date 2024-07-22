@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cita_types::{Address, H256, H512};
+extern crate cita_types as types;
+
+use crate::types::{Address, H256, H512};
 
 mod error;
 mod keypair;

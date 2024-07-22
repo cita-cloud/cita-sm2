@@ -13,29 +13,27 @@
 // limitations under the License.
 
 use super::{Address, Error, PrivKey, PubKey};
-use cita_crypto_trait::CreateKey;
 use cita_types::H160;
+use cita_crypto_trait::CreateKey;
 use hashable::Hashable;
-use libsm::sm2::signature::SigCtx;
+use rand::{thread_rng, Rng};
 use rustc_serialize::hex::ToHex;
 use std::fmt;
-
-use arrayref::array_ref;
 
 pub fn pubkey_to_address(pubkey: &PubKey) -> Address {
     H160::from(pubkey.crypt_hash())
 }
 
-#[derive(Default)]
 pub struct KeyPair {
+    pub inner: efficient_sm2::KeyPair,
     privkey: PrivKey,
     pubkey: PubKey,
 }
 
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        writeln!(f, "privkey:  {}", self.privkey.0.to_hex())?;
-        writeln!(f, "pubkey:  {}", self.pubkey.0.to_hex())?;
+        writeln!(f, "privkey:  {}", self.privkey().0.to_hex())?;
+        writeln!(f, "pubkey:  {}", self.pubkey().0.to_hex())?;
         write!(f, "address:  {}", self.address().0.to_hex())
     }
 }
@@ -44,28 +42,29 @@ impl CreateKey for KeyPair {
     type PrivKey = PrivKey;
     type PubKey = PubKey;
     type Error = Error;
-    type Address = Address;
 
     fn from_privkey(privkey: Self::PrivKey) -> Result<Self, Self::Error> {
-        let ctx = SigCtx::new();
-        ctx.load_seckey(&privkey.0)
-            .map_err(|_| Error::RecoverError)
-            .map(|sk| {
-                let pk = ctx.pk_from_sk(&sk);
-                let data = ctx.serialize_pubkey(&pk, false);
-                let pubkey = PubKey::from(array_ref![data, 1, 64]);
-                KeyPair { privkey, pubkey }
-            })
+        let inner =
+            efficient_sm2::KeyPair::new(privkey.as_bytes()).map_err(|_| Error::KeyPairError)?;
+        let pubkey = PubKey::from_slice(&inner.public_key().bytes_less_safe()[1..]);
+        Ok(KeyPair {
+            inner,
+            privkey,
+            pubkey,
+        })
     }
 
     fn gen_keypair() -> Self {
-        let ctx = SigCtx::new();
-        let (pk, sk) = ctx.new_keypair();
-        let pdata = ctx.serialize_pubkey(&pk, false);
-        let sdata = ctx.serialize_seckey(&sk);
-        let pubkey = PubKey::from(array_ref![pdata, 1, 64]);
-        let privkey = PrivKey::from(array_ref![sdata, 0, 32]);
-        KeyPair { privkey, pubkey }
+        let mut sk_bz = [0; 32];
+        thread_rng().fill(&mut sk_bz);
+        let privkey = PrivKey::from_slice(&sk_bz);
+        let inner = efficient_sm2::KeyPair::new(privkey.as_bytes()).unwrap();
+        let pubkey = PubKey::from_slice(&inner.public_key().bytes_less_safe()[1..]);
+        KeyPair {
+            inner,
+            privkey,
+            pubkey,
+        }
     }
 
     fn privkey(&self) -> &Self::PrivKey {
@@ -77,7 +76,13 @@ impl CreateKey for KeyPair {
     }
 
     fn address(&self) -> Address {
-        pubkey_to_address(&self.pubkey)
+        pubkey_to_address(self.pubkey())
+    }
+}
+
+impl Default for KeyPair {
+    fn default() -> Self {
+        unimplemented!()
     }
 }
 

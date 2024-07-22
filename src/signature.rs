@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{pubkey_to_address, Address, Error, Message, PrivKey, PubKey, SIGNATURE_BYTES_LEN};
-use arrayref::array_ref;
-use cita_crypto_trait::Sign;
-use libsm::sm2::signature::{SigCtx, Signature as Sm2Signature};
+use super::{
+    pubkey_to_address, Address, Error, KeyPair, Message, PrivKey, PubKey, SIGNATURE_BYTES_LEN,
+};
+use cita_crypto_trait::{CreateKey, Sign};
 use rlp::*;
 use rustc_serialize::hex::ToHex;
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
@@ -68,8 +68,8 @@ impl Encodable for Signature {
 
 impl<'de> Deserialize<'de> for Signature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         struct SignatureVisitor;
 
@@ -81,8 +81,8 @@ impl<'de> Deserialize<'de> for Signature {
             }
 
             fn visit_seq<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
-            where
-                V: SeqAccess<'de>,
+                where
+                    V: SeqAccess<'de>,
             {
                 let mut signature = Signature([0u8; SIGNATURE_BYTES_LEN]);
                 for i in 0..SIGNATURE_BYTES_LEN {
@@ -102,8 +102,8 @@ impl<'de> Deserialize<'de> for Signature {
 
 impl Serialize for Signature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(SIGNATURE_BYTES_LEN))?;
         for i in 0..SIGNATURE_BYTES_LEN {
@@ -212,53 +212,40 @@ impl Sign for Signature {
     type PubKey = PubKey;
     type Message = Message;
     type Error = Error;
-    type Address = Address;
 
     fn sign(privkey: &Self::PrivKey, message: &Self::Message) -> Result<Self, Error> {
-        let ctx = SigCtx::new();
-        ctx.load_seckey(&privkey.0)
-            .map_err(|_| Error::RecoverError)
-            .map(|sk| {
-                let pk = ctx.pk_from_sk(&sk);
-                let signature = ctx.sign(message.as_ref(), &sk, &pk);
-                let mut sig_bytes = [0u8; SIGNATURE_BYTES_LEN];
-                let r_bytes = signature.get_r().to_bytes_be();
-                let s_bytes = signature.get_s().to_bytes_be();
-                sig_bytes[32 - r_bytes.len()..32].copy_from_slice(&r_bytes[..]);
-                sig_bytes[64 - s_bytes.len()..64].copy_from_slice(&s_bytes[..]);
-                sig_bytes[64..].copy_from_slice(&ctx.serialize_pubkey(&pk, false)[1..]);
-                sig_bytes.into()
-            })
+        let key_pair = KeyPair::from_privkey(*privkey)?;
+
+        let sig = key_pair
+            .inner
+            .sign(message.as_bytes())
+            .map_err(|_| Error::SignError)?;
+        let mut sig_bytes = [0u8; SIGNATURE_BYTES_LEN];
+        sig_bytes[..32].copy_from_slice(&sig.r());
+        sig_bytes[32..64].copy_from_slice(&sig.s());
+        sig_bytes[64..].copy_from_slice(key_pair.pubkey().as_bytes());
+        Ok(Signature(sig_bytes))
     }
 
     fn recover(&self, message: &Message) -> Result<Self::PubKey, Error> {
-        let ctx = SigCtx::new();
-        let sig = Sm2Signature::new(self.r(), self.s());
-        let mut pk_full = [0u8; 65];
-        pk_full[0] = 4;
-        pk_full[1..].copy_from_slice(self.pk());
-        ctx.load_pubkey(&pk_full[..])
-            .map_err(|_| Error::RecoverError)
-            .and_then(|pk| {
-                if ctx.verify(message.as_ref(), &pk, &sig) {
-                    Ok(PubKey::from(array_ref![self.pk(), 0, 64]))
-                } else {
-                    Err(Error::RecoverError)
-                }
-            })
+        let sig =
+            efficient_sm2::Signature::new(self.r(), self.s()).map_err(|_| Error::SignatureError)?;
+        let pk = efficient_sm2::PublicKey::from_slice(self.pk());
+        match sig.verify(&pk, message.as_bytes()) {
+            Ok(()) => Ok(PubKey::from_slice(self.pk())),
+            Err(_) => Err(Error::RecoverError),
+        }
     }
 
     fn verify_public(&self, pubkey: &Self::PubKey, message: &Self::Message) -> Result<bool, Error> {
-        let pubkey_from_sig = PubKey::from(array_ref![self.pk(), 0, 64]);
-        if pubkey_from_sig == *pubkey {
-            let ctx = SigCtx::new();
-            let sig = Sm2Signature::new(self.r(), self.s());
-            let mut pk_full = [0u8; 65];
-            pk_full[0] = 4;
-            pk_full[1..].copy_from_slice(self.pk());
-            ctx.load_pubkey(&pk_full[..])
-                .map_err(|_| Error::RecoverError)
-                .map(|pk| ctx.verify(message.as_ref(), &pk, &sig))
+        let sig =
+            efficient_sm2::Signature::new(self.r(), self.s()).map_err(|_| Error::SignatureError)?;
+        let pk = efficient_sm2::PublicKey::from_slice(self.pk());
+        if *pubkey == PubKey::from_slice(self.pk()) {
+            match sig.verify(&pk, message.as_bytes()) {
+                Ok(()) => Ok(true),
+                Err(_) => Ok(false),
+            }
         } else {
             Ok(false)
         }
@@ -275,7 +262,9 @@ impl Sign for Signature {
 mod tests {
     use super::{Message, Signature};
     use crate::keypair::KeyPair;
+    use crate::PrivKey;
     use cita_crypto_trait::{CreateKey, Sign};
+    use hashable::Hashable;
 
     #[test]
     fn test_sign_verify() {
@@ -309,5 +298,25 @@ mod tests {
         let sig = &sig;
         let slice: &[u8] = sig.into();
         assert_eq!(Signature::from(slice), *sig);
+    }
+
+    #[test]
+    fn test_sign_ring_libsm() {
+        let pri = hex::decode("fffffc4d0000064efffffb8c00000324fffffdc600000543fffff8950000053b")
+            .unwrap();
+        let keypair = KeyPair::from_privkey(PrivKey::from_slice(pri.as_slice())).unwrap();
+        let pk = keypair.pubkey();
+        println!("{}", hex::encode(&pk));
+
+        let mut pubkey = [0u8; 65];
+        pubkey[0] = 4;
+        pubkey[1..].copy_from_slice(pk.as_bytes());
+        let message = "hello world".as_bytes();
+
+        let message = message.crypt_hash();
+        println!("real msg: {}", hex::encode(&message));
+
+        let sig = Signature::sign(keypair.privkey(), &message).unwrap();
+        println!("sig: {}", hex::encode(sig.as_ref()));
     }
 }

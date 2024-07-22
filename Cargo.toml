@@ -11,13 +11,15 @@ rustc-serialize = "0.3"
 serde = "1.0"
 cita-types = "0.1"
 hashable = { package = "cita-hashable", version = "0.1" }
-cita-crypto-trait = "0.1"
+cita-crypto-trait = "0.2"
 rlp = "0.5"
-libsm = "0.4"
-arrayref = "0.3"
+libsm = "0.6"
+efficient-sm2 = "0.2"
+hex = "0.4"
+rand = "0.8"
 
 [features]
-default = []
+default = ["sm3hash"]
 sha3hash = ["hashable/sha3hash"]
 blake2bhash = ["hashable/blake2bhash"]
 sm3hash = ["hashable/sm3hash"]
