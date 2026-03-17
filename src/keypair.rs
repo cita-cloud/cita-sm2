@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use super::{Address, Error, PrivKey, PubKey};
-use cita_types::H160;
 use cita_crypto_trait::CreateKey;
+use cita_types::H160;
 use hashable::Hashable;
-use rand::{thread_rng, Rng};
+use rand::{rng, RngExt};
 use rustc_serialize::hex::ToHex;
 use std::fmt;
 
@@ -56,7 +56,7 @@ impl CreateKey for KeyPair {
 
     fn gen_keypair() -> Self {
         let mut sk_bz = [0; 32];
-        thread_rng().fill(&mut sk_bz);
+        rng().fill(&mut sk_bz);
         let privkey = PrivKey::from_slice(&sk_bz);
         let inner = efficient_sm2::KeyPair::new(privkey.as_bytes()).unwrap();
         let pubkey = PubKey::from_slice(&inner.public_key().bytes_less_safe()[1..]);
